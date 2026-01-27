@@ -1,0 +1,133 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sonarqube-data-pvc
+  namespace: platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: microk8s-hostpath
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sonarqube-extensions-pvc
+  namespace: platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: microk8s-hostpath
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sonarqube
+  namespace: platform
+  labels:
+    app: sonarqube
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sonarqube
+  template:
+    metadata:
+      labels:
+        app: sonarqube
+    spec:
+      initContainers:
+        - name: init-sysctl
+          image: busybox
+          command: ['sh', '-c', 'sysctl -w vm.max_map_count=262144 || true']
+          securityContext:
+            privileged: true
+      containers:
+        - name: sonarqube
+          image: sonarqube:community
+          ports:
+            - containerPort: 9000
+          env:
+            - name: SONAR_JDBC_URL
+              value: "jdbc:postgresql://sonarqube-postgres:5432/sonardb"
+            - name: SONAR_JDBC_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: sonarqube-postgres-secret
+                  key: POSTGRES_USER
+            - name: SONAR_JDBC_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sonarqube-postgres-secret
+                  key: POSTGRES_PASSWORD
+          volumeMounts:
+            - name: sonarqube-data
+              mountPath: /opt/sonarqube/data
+            - name: sonarqube-extensions
+              mountPath: /opt/sonarqube/extensions
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "500m"
+            limits:
+              memory: "4Gi"
+              cpu: "2"
+          readinessProbe:
+            httpGet:
+              path: /api/system/status
+              port: 9000
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/system/status
+              port: 9000
+            initialDelaySeconds: 120
+            periodSeconds: 30
+      volumes:
+        - name: sonarqube-data
+          persistentVolumeClaim:
+            claimName: sonarqube-data-pvc
+        - name: sonarqube-extensions
+          persistentVolumeClaim:
+            claimName: sonarqube-extensions-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sonarqube
+  namespace: platform
+spec:
+  selector:
+    app: sonarqube
+  ports:
+    - port: 80
+      targetPort: 9000
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sonarqube-ingress
+  namespace: platform
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: sonar.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sonarqube
+                port:
+                  number: 80

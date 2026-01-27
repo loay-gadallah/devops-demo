@@ -1,0 +1,117 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jira-pvc
+  namespace: platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: microk8s-hostpath
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jira
+  namespace: platform
+  labels:
+    app: jira
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jira
+  template:
+    metadata:
+      labels:
+        app: jira
+    spec:
+      containers:
+        - name: jira
+          image: atlassian/jira-software:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ATL_JDBC_URL
+              value: "jdbc:postgresql://postgres:5432/jiradb"
+            - name: ATL_JDBC_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_USER
+            - name: ATL_JDBC_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD
+            - name: ATL_DB_DRIVER
+              value: "org.postgresql.Driver"
+            - name: ATL_DB_TYPE
+              value: "postgres72"
+            - name: JVM_MINIMUM_MEMORY
+              value: "1024m"
+            - name: JVM_MAXIMUM_MEMORY
+              value: "2048m"
+          volumeMounts:
+            - name: jira-home
+              mountPath: /var/atlassian/application-data/jira
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "500m"
+            limits:
+              memory: "4Gi"
+              cpu: "2"
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /status
+              port: 8080
+            initialDelaySeconds: 120
+            periodSeconds: 30
+      volumes:
+        - name: jira-home
+          persistentVolumeClaim:
+            claimName: jira-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jira
+  namespace: platform
+spec:
+  selector:
+    app: jira
+  ports:
+    - port: 80
+      targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jira-ingress
+  namespace: platform
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: jira.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: jira
+                port:
+                  number: 80

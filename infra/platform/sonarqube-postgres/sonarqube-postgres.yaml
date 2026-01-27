@@ -1,0 +1,67 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sonarqube-postgres-pvc
+  namespace: platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: microk8s-hostpath
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sonarqube-postgres
+  namespace: platform
+  labels:
+    app: sonarqube-postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sonarqube-postgres
+  template:
+    metadata:
+      labels:
+        app: sonarqube-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: sonarqube-postgres-secret
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: sonarqube-postgres-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sonarqube-postgres
+  namespace: platform
+spec:
+  selector:
+    app: sonarqube-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+  type: ClusterIP
