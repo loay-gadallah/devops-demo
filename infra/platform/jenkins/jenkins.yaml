@@ -80,6 +80,18 @@ spec:
                   name: jira-creds-secret
                   key: JIRA_PASSWORD
                   optional: true
+            - name: GITHUB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: github-creds-secret
+                  key: GITHUB_USERNAME
+                  optional: true
+            - name: GITHUB_PAT
+              valueFrom:
+                secretKeyRef:
+                  name: github-creds-secret
+                  key: GITHUB_PAT
+                  optional: true
           volumeMounts:
             - name: jenkins-home
               mountPath: /var/jenkins_home

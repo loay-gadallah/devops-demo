@@ -29,5 +29,6 @@ infra/bootstrap/02-secrets-template/jira-creds-secret.yaml
 infra/bootstrap/02-secrets-template/sonarqube-token-secret.yaml
 infra/bootstrap/02-secrets-template/postgres-secret.yaml
 infra/bootstrap/02-secrets-template/jira-api-secret.yaml
+infra/bootstrap/02-secrets-template/github-creds-secret.yaml
 *.key
 *.pem

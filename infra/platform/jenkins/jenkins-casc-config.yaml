@@ -34,6 +34,12 @@ data:
                   username: "${JIRA_USERNAME}"
                   password: "${JIRA_PASSWORD}"
                   description: "Jira Basic Authentication"
+              - usernamePassword:
+                  scope: GLOBAL
+                  id: "github-creds"
+                  username: "${GITHUB_USERNAME}"
+                  password: "${GITHUB_PAT}"
+                  description: "GitHub Credentials"
     tool:
       sonarRunnerInstallation:
         installations:
