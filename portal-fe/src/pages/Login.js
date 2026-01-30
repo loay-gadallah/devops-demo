@@ -99,6 +99,7 @@ export default function Login() {
             {loading ? <span className="spinner spinner-sm" /> : 'Sign In'}
           </button>
         </form>
+        <p className="login-version">v1.1.0</p>
       </div>
     </div>
   );

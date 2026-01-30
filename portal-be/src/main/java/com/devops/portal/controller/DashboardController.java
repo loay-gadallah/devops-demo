@@ -24,4 +24,12 @@ public class DashboardController {
     public ResponseEntity<DashboardResponse> getDashboard() {
         return ResponseEntity.ok(dashboardService.getDashboard(authUtil.getCurrentUserId()));
     }
+
+    @GetMapping("/version")
+    public ResponseEntity<java.util.Map<String, String>> getVersion() {
+        return ResponseEntity.ok(java.util.Map.of(
+            "version", "1.1.0",
+            "name", "RetailBank Portal API"
+        ));
+    }
 }
