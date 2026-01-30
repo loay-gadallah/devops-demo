@@ -56,3 +56,21 @@ data:
                   installers:
                     - sonarRunnerInstaller:
                         id: "5.0.1.3006"
+      maven:
+        installations:
+          - name: "Maven-3.9"
+            properties:
+              - installSource:
+                  installers:
+                    - maven:
+                        id: "3.9.9"
+      nodejs:
+        installations:
+          - name: "NodeJS-18"
+            properties:
+              - installSource:
+                  installers:
+                    - nodeJSInstaller:
+                        id: "18.20.4"
+                        npmPackages: ""
+                        npmPackagesRefreshHours: 72
