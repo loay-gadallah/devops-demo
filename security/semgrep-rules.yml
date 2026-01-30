@@ -1,0 +1,36 @@
+rules:
+  - id: hardcoded-secret-generic
+    patterns:
+      - pattern-either:
+          - pattern: $X = "...SECRET..."
+          - pattern: $X = "...PASSWORD..."
+          - pattern: $X = "...API_KEY..."
+    message: Potential hardcoded secret detected
+    languages: [java, javascript, typescript]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: CWE-798
+
+  - id: sql-injection-string-concat
+    patterns:
+      - pattern: |
+          String $QUERY = "..." + $INPUT + "...";
+      - metavariable-regex:
+          metavariable: $QUERY
+          regex: (?i).*(select|insert|update|delete|drop).*
+    message: Potential SQL injection via string concatenation
+    languages: [java]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: CWE-89
+
+  - id: xss-innerhtml
+    pattern: $EL.innerHTML = $INPUT
+    message: Potential XSS via innerHTML assignment
+    languages: [javascript, typescript]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: CWE-79

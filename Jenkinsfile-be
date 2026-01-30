@@ -1,0 +1,304 @@
+pipeline {
+    agent any
+
+    environment {
+        SONAR_QUBE_ENV  = 'SonarQube'
+        REGISTRY        = 'localhost:32000'
+        IMAGE_NAME      = 'portal-be'
+        IMAGE_TAG       = "${env.GIT_COMMIT?.take(8) ?: 'latest'}"
+        STAGING_NS      = 'apps-staging'
+        PROD_NS         = 'apps-prod'
+        JIRA_SITE       = 'jira.local'
+        JIRA_PROJECT    = 'DEVOPS'
+    }
+
+    parameters {
+        string(name: 'ISSUE_KEY', defaultValue: '', description: 'Jira Issue Key (e.g. DEVOPS-1)')
+        string(name: 'BRANCH', defaultValue: 'main', description: 'Branch to build')
+    }
+
+    tools {
+        maven 'Maven-3.9'
+        jdk 'JDK-17'
+    }
+
+    stages {
+
+        // ───── Stage 1: Clone ─────
+        stage('Clone') {
+            steps {
+                checkout scm
+            }
+        }
+
+        // ───── Stage 2: Unit Test ─────
+        stage('Unit Test') {
+            steps {
+                dir('portal-be') {
+                    sh 'mvn test -B'
+                }
+            }
+            post {
+                always {
+                    junit testResults: 'portal-be/target/surefire-reports/*.xml', allowEmptyResults: true
+                    jacoco execPattern: 'portal-be/target/jacoco.exec',
+                           classPattern: 'portal-be/target/classes',
+                           sourcePattern: 'portal-be/src/main/java'
+                }
+                failure {
+                    script { notifyJira('Unit Tests FAILED') }
+                }
+            }
+        }
+
+        // ───── Stage 3: Code Quality ─────
+        stage('Code Quality') {
+            steps {
+                dir('portal-be') {
+                    withSonarQubeEnv(env.SONAR_QUBE_ENV) {
+                        sh '''
+                            mvn sonar:sonar \
+                                -Dsonar.projectKey=portal-be \
+                                -Dsonar.projectName="Portal Backend" \
+                                -Dsonar.java.binaries=target/classes \
+                                -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml \
+                                -B
+                        '''
+                    }
+                }
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+            post {
+                failure {
+                    script { notifyJira('Quality Gate FAILED') }
+                }
+            }
+        }
+
+        // ───── Stage 4: Security Check (SAST) ─────
+        stage('Security Check') {
+            steps {
+                dir('portal-be') {
+                    // Semgrep
+                    sh '''
+                        semgrep --config=p/owasp-top-ten \
+                               --config=p/java \
+                               --config=../security/semgrep-rules.yml \
+                               --json --output=semgrep-results.json \
+                               --severity=ERROR \
+                               src/ || true
+                    '''
+                    // SpotBugs
+                    sh 'mvn spotbugs:check -B || true'
+
+                    // OWASP Dependency-Check
+                    sh '''
+                        dependency-check --project portal-be \
+                            --scan . \
+                            --format JSON --format HTML \
+                            --out dependency-check-report \
+                            --suppression ../security/dependency-check-suppression.xml \
+                            || true
+                    '''
+                    // Evaluate findings
+                    script {
+                        def semgrepJson = readFile('semgrep-results.json')
+                        def results = readJSON text: semgrepJson
+                        def criticals = results.results?.findAll { it.extra?.severity in ['ERROR'] }
+                        if (criticals?.size() > 0) {
+                            notifyJira("SAST: ${criticals.size()} critical findings detected")
+                            error("SAST failed: ${criticals.size()} critical/high findings")
+                        }
+                    }
+                }
+            }
+        }
+
+        // ───── Stage 5: Build ─────
+        stage('Build') {
+            steps {
+                dir('portal-be') {
+                    sh 'mvn package -DskipTests -B'
+                    sh "docker build -t ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} ."
+                    sh "docker push ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+                }
+            }
+        }
+
+        // ───── Stage 6: Test (Integration / UI / API) ─────
+        stage('Test') {
+            steps {
+                // Deploy to staging
+                sh """
+                    microk8s kubectl set image deployment/portal-be \
+                        portal-be=${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} \
+                        -n ${STAGING_NS} || \
+                    microk8s kubectl apply -f infra/apps/staging/portal-be.yaml -n ${STAGING_NS}
+                """
+                sh 'sleep 15'
+
+                // API tests with Newman
+                dir('tests/api') {
+                    sh 'npm ci --prefer-offline'
+                    sh '''
+                        npx newman run postman/portal-api.postman_collection.json \
+                            -e postman/staging-environment.json \
+                            --reporters cli,junit \
+                            --reporter-junit-export results/newman-results.xml
+                    '''
+                }
+            }
+            post {
+                always {
+                    junit testResults: 'tests/api/results/*.xml', allowEmptyResults: true
+                }
+                failure {
+                    script { notifyJira('API Tests FAILED') }
+                }
+            }
+        }
+
+        // ───── Stage 7: Release Approval (Jira-driven) ─────
+        stage('Release Approval') {
+            steps {
+                script {
+                    def issueKey = params.ISSUE_KEY
+                    if (!issueKey) {
+                        issueKey = createJiraIssue("Release approval for portal-be build #${env.BUILD_NUMBER}")
+                    }
+
+                    echo "Waiting for Jira approval on ${issueKey}..."
+
+                    timeout(time: 60, unit: 'MINUTES') {
+                        waitUntil(initialRecurrencePeriod: 15000) {
+                            def approved = checkJiraApproval(issueKey)
+                            return approved
+                        }
+                    }
+                }
+            }
+            post {
+                failure {
+                    script { notifyJira('Release approval TIMED OUT') }
+                }
+            }
+        }
+
+        // ───── Stage 8: Penetration Test ─────
+        stage('Penetration Test') {
+            steps {
+                sh """
+                    docker run --rm \
+                        -v \$(pwd)/security:/zap/wrk:rw \
+                        ghcr.io/zaproxy/zaproxy:stable \
+                        zap-baseline.py \
+                        -t http://portal-be.${STAGING_NS}.svc.cluster.local:8080 \
+                        -r zap-be-report.html \
+                        -J zap-be-report.json \
+                        -c zap-baseline.conf \
+                        || true
+                """
+                script {
+                    if (fileExists('security/zap-be-report.json')) {
+                        def zapReport = readJSON file: 'security/zap-be-report.json'
+                        def highAlerts = zapReport.site?.collect { site ->
+                            site.alerts?.findAll { it.riskcode?.toInteger() >= 3 }
+                        }?.flatten()?.findAll { it != null }
+
+                        if (highAlerts?.size() > 0) {
+                            notifyJira("PenTest: ${highAlerts.size()} high/critical vulnerabilities found")
+                            error("Penetration test failed: ${highAlerts.size()} high/critical alerts")
+                        }
+                    }
+                }
+            }
+        }
+
+        // ───── Stage 9: Deploy ─────
+        stage('Deploy') {
+            steps {
+                sh """
+                    microk8s kubectl set image deployment/portal-be \
+                        portal-be=${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} \
+                        -n ${PROD_NS}
+                """
+                sh "microk8s kubectl rollout status deployment/portal-be -n ${PROD_NS} --timeout=120s"
+                script {
+                    notifyJira("portal-be deployed to production (build #${env.BUILD_NUMBER}, image: ${IMAGE_TAG})")
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Pipeline completed successfully!'
+            script { notifyJira('Pipeline SUCCEEDED') }
+        }
+        failure {
+            echo 'Pipeline failed. Check logs above.'
+            script { notifyJira('Pipeline FAILED') }
+        }
+    }
+}
+
+// ───── Helper Functions ─────
+
+def notifyJira(String message) {
+    def issueKey = params.ISSUE_KEY
+    if (!issueKey) return
+    try {
+        withCredentials([usernamePassword(credentialsId: 'jira-creds', usernameVariable: 'JIRA_USER', passwordVariable: 'JIRA_PASS')]) {
+            sh """
+                curl -s -u "\${JIRA_USER}:\${JIRA_PASS}" \
+                    -X POST \
+                    -H "Content-Type: application/json" \
+                    -d '{"body": "[Jenkins] ${message} - Build #${env.BUILD_NUMBER}"}' \
+                    "http://${JIRA_SITE}/rest/api/2/issue/${issueKey}/comment"
+            """
+        }
+    } catch (Exception e) {
+        echo "Jira notification failed: ${e.message}"
+    }
+}
+
+def checkJiraApproval(String issueKey) {
+    def result = false
+    try {
+        withCredentials([usernamePassword(credentialsId: 'jira-creds', usernameVariable: 'JIRA_USER', passwordVariable: 'JIRA_PASS')]) {
+            def response = sh(script: """
+                curl -s -u "\${JIRA_USER}:\${JIRA_PASS}" \
+                    "http://${JIRA_SITE}/rest/api/2/issue/${issueKey}"
+            """, returnStdout: true).trim()
+            def issue = readJSON text: response
+            def status = issue.fields?.status?.name?.toLowerCase()
+            def labels = issue.fields?.labels?.collect { it.toLowerCase() }
+            result = (status == 'approved' || labels?.contains('approved'))
+        }
+    } catch (Exception e) {
+        echo "Jira check failed: ${e.message}"
+    }
+    return result
+}
+
+def createJiraIssue(String summary) {
+    def issueKey = ''
+    try {
+        withCredentials([usernamePassword(credentialsId: 'jira-creds', usernameVariable: 'JIRA_USER', passwordVariable: 'JIRA_PASS')]) {
+            def response = sh(script: """
+                curl -s -u "\${JIRA_USER}:\${JIRA_PASS}" \
+                    -X POST \
+                    -H "Content-Type: application/json" \
+                    -d '{"fields": {"project": {"key": "${JIRA_PROJECT}"}, "summary": "${summary}", "issuetype": {"name": "Task"}}}' \
+                    "http://${JIRA_SITE}/rest/api/2/issue"
+            """, returnStdout: true).trim()
+            def json = readJSON text: response
+            issueKey = json.key
+        }
+    } catch (Exception e) {
+        error("Failed to create Jira issue: ${e.message}")
+    }
+    return issueKey
+}

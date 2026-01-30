@@ -10,6 +10,13 @@ metadata:
     app: jenkins
 data:
   jenkins.yaml: |
+    jenkins:
+      securityRealm:
+        local:
+          allowsSignup: false
+          users:
+           - id: "${JENKINS_ADMIN_ID}"
+             password: "${JENKINS_ADMIN_PASSWORD}"
     unclassified:
       sonarGlobalConfiguration:
         installations:

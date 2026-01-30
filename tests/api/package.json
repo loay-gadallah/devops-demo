@@ -1,0 +1,12 @@
+{
+  "name": "portal-api-tests",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "newman run postman/portal-api.postman_collection.json -e postman/staging-environment.json",
+    "test:junit": "newman run postman/portal-api.postman_collection.json -e postman/staging-environment.json --reporters cli,junit --reporter-junit-export results/newman-results.xml"
+  },
+  "devDependencies": {
+    "newman": "^6.1.0"
+  }
+}

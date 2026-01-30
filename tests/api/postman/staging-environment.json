@@ -1,0 +1,11 @@
+{
+  "id": "staging-env",
+  "name": "Staging",
+  "values": [
+    {
+      "key": "baseUrl",
+      "value": "http://portal-be.apps-staging.svc.cluster.local:8080",
+      "enabled": true
+    }
+  ]
+}

@@ -92,6 +92,16 @@ spec:
                   name: github-creds-secret
                   key: GITHUB_PAT
                   optional: true
+            - name: JENKINS_ADMIN_ID
+              valueFrom:
+                secretKeyRef:
+                  name: jenkins-admin-secret
+                  key: JENKINS_ADMIN_ID
+            - name: JENKINS_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: jenkins-admin-secret
+                  key: JENKINS_ADMIN_PASSWORD
           volumeMounts:
             - name: jenkins-home
               mountPath: /var/jenkins_home
