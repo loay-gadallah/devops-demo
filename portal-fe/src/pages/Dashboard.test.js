@@ -11,18 +11,17 @@ jest.mock('../context/AuthContext', () => ({
   }),
 }));
 
-const mockApi = {
-  get: jest.fn(),
-  post: jest.fn(),
-  interceptors: { request: { use: jest.fn() }, response: { use: jest.fn() } },
-};
-
 jest.mock('../services/api', () => ({
   __esModule: true,
-  default: mockApi,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    interceptors: { request: { use: jest.fn() }, response: { use: jest.fn() } },
+  },
 }));
 
 import Dashboard from './Dashboard';
+import api from '../services/api';
 
 const renderDashboard = () =>
   render(
@@ -32,7 +31,7 @@ const renderDashboard = () =>
   );
 
 beforeEach(() => {
-  mockApi.get.mockImplementation((url) => {
+  api.get.mockImplementation((url) => {
     if (url.includes('stats')) {
       return Promise.resolve({
         data: { totalBalance: 50000, accountCount: 3, activeCards: 2, pendingTransfers: 1 },

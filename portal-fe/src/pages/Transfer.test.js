@@ -4,15 +4,13 @@ import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { BrowserRouter } from 'react-router-dom';
 
-const mockApi = {
-  get: jest.fn(),
-  post: jest.fn(),
-  interceptors: { request: { use: jest.fn() }, response: { use: jest.fn() } },
-};
-
 jest.mock('../services/api', () => ({
   __esModule: true,
-  default: mockApi,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    interceptors: { request: { use: jest.fn() }, response: { use: jest.fn() } },
+  },
 }));
 
 jest.mock('../context/AuthContext', () => ({
@@ -24,9 +22,10 @@ jest.mock('../context/AuthContext', () => ({
 }));
 
 import Transfers from './Transfer';
+import api from '../services/api';
 
 beforeEach(() => {
-  mockApi.get.mockResolvedValue({ data: [] });
+  api.get.mockResolvedValue({ data: [] });
 });
 
 test('renders transfer history heading', async () => {

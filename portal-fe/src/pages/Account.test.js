@@ -4,15 +4,13 @@ import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { BrowserRouter } from 'react-router-dom';
 
-const mockApi = {
-  get: jest.fn(),
-  post: jest.fn(),
-  interceptors: { request: { use: jest.fn() }, response: { use: jest.fn() } },
-};
-
 jest.mock('../services/api', () => ({
   __esModule: true,
-  default: mockApi,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    interceptors: { request: { use: jest.fn() }, response: { use: jest.fn() } },
+  },
 }));
 
 jest.mock('../context/AuthContext', () => ({
@@ -24,9 +22,10 @@ jest.mock('../context/AuthContext', () => ({
 }));
 
 import Accounts from './Account';
+import api from '../services/api';
 
 beforeEach(() => {
-  mockApi.get.mockResolvedValue({
+  api.get.mockResolvedValue({
     data: [
       { id: '1', accountName: 'Checking Account', accountNumber: '00124521', type: 'CHECKING', balance: 12450.75, currency: 'USD' },
       { id: '2', accountName: 'Savings Account', accountNumber: '00128834', type: 'SAVINGS', balance: 48200.00, currency: 'USD' },
