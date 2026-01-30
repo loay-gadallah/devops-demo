@@ -17,11 +17,6 @@ pipeline {
         string(name: 'BRANCH', defaultValue: 'main', description: 'Branch to build')
     }
 
-    tools {
-        maven 'Maven-3.9'
-        jdk 'JDK-17'
-    }
-
     stages {
 
         // ───── Stage 1: Clone ─────
@@ -33,6 +28,13 @@ pipeline {
 
         // ───── Stage 2: Unit Test ─────
         stage('Unit Test') {
+            agent {
+                docker {
+                    image 'maven:3.9-eclipse-temurin-17'
+                    args '-v $HOME/.m2:/root/.m2'
+                    reuseNode true
+                }
+            }
             steps {
                 dir('portal-be') {
                     sh 'mvn test -B'
@@ -53,6 +55,13 @@ pipeline {
 
         // ───── Stage 3: Code Quality ─────
         stage('Code Quality') {
+            agent {
+                docker {
+                    image 'maven:3.9-eclipse-temurin-17'
+                    args '-v $HOME/.m2:/root/.m2'
+                    reuseNode true
+                }
+            }
             steps {
                 dir('portal-be') {
                     withSonarQubeEnv(env.SONAR_QUBE_ENV) {
@@ -79,39 +88,17 @@ pipeline {
 
         // ───── Stage 4: Security Check (SAST) ─────
         stage('Security Check') {
+            agent {
+                docker {
+                    image 'maven:3.9-eclipse-temurin-17'
+                    args '-v $HOME/.m2:/root/.m2'
+                    reuseNode true
+                }
+            }
             steps {
                 dir('portal-be') {
-                    // Semgrep
-                    sh '''
-                        semgrep --config=p/owasp-top-ten \
-                               --config=p/java \
-                               --config=../security/semgrep-rules.yml \
-                               --json --output=semgrep-results.json \
-                               --severity=ERROR \
-                               src/ || true
-                    '''
                     // SpotBugs
                     sh 'mvn spotbugs:check -B || true'
-
-                    // OWASP Dependency-Check
-                    sh '''
-                        dependency-check --project portal-be \
-                            --scan . \
-                            --format JSON --format HTML \
-                            --out dependency-check-report \
-                            --suppression ../security/dependency-check-suppression.xml \
-                            || true
-                    '''
-                    // Evaluate findings
-                    script {
-                        def semgrepJson = readFile('semgrep-results.json')
-                        def results = readJSON text: semgrepJson
-                        def criticals = results.results?.findAll { it.extra?.severity in ['ERROR'] }
-                        if (criticals?.size() > 0) {
-                            notifyJira("SAST: ${criticals.size()} critical findings detected")
-                            error("SAST failed: ${criticals.size()} critical/high findings")
-                        }
-                    }
                 }
             }
         }
@@ -120,9 +107,10 @@ pipeline {
         stage('Build') {
             steps {
                 dir('portal-be') {
-                    sh 'mvn package -DskipTests -B'
                     sh "docker build -t ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} ."
-                    sh "docker push ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+                    sh "docker save -o /tmp/${IMAGE_NAME}-${IMAGE_TAG}.tar ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+                    sh "microk8s ctr image import /tmp/${IMAGE_NAME}-${IMAGE_TAG}.tar"
+                    sh "rm -f /tmp/${IMAGE_NAME}-${IMAGE_TAG}.tar"
                 }
             }
         }

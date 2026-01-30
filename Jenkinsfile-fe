@@ -28,9 +28,15 @@ pipeline {
 
         // ───── Stage 2: Unit Test ─────
         stage('Unit Test') {
+            agent {
+                docker {
+                    image 'node:18-alpine'
+                    reuseNode true
+                }
+            }
             steps {
                 dir('portal-fe') {
-                    sh 'npm ci --prefer-offline'
+                    sh 'npm install'
                     sh 'npm run test:ci'
                 }
             }
@@ -46,13 +52,16 @@ pipeline {
 
         // ───── Stage 3: Code Quality ─────
         stage('Code Quality') {
+            agent {
+                docker {
+                    image 'sonarsource/sonar-scanner-cli:latest'
+                    reuseNode true
+                }
+            }
             steps {
                 dir('portal-fe') {
-                    script {
-                        def scannerHome = tool 'SonarScanner'
-                        withSonarQubeEnv(env.SONAR_QUBE_ENV) {
-                            sh "${scannerHome}/bin/sonar-scanner"
-                        }
+                    withSonarQubeEnv(env.SONAR_QUBE_ENV) {
+                        sh 'sonar-scanner'
                     }
                 }
                 timeout(time: 5, unit: 'MINUTES') {
@@ -107,7 +116,9 @@ pipeline {
             steps {
                 dir('portal-fe') {
                     sh "docker build -t ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} ."
-                    sh "docker push ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+                    sh "docker save -o /tmp/${IMAGE_NAME}-${IMAGE_TAG}.tar ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+                    sh "microk8s ctr image import /tmp/${IMAGE_NAME}-${IMAGE_TAG}.tar"
+                    sh "rm -f /tmp/${IMAGE_NAME}-${IMAGE_TAG}.tar"
                 }
             }
         }
