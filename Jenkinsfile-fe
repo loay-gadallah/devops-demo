@@ -35,7 +35,7 @@ pipeline {
             steps {
                 dir('portal-fe') {
                     sh 'npm install'
-                    sh 'CI=true npm test -- --watchAll=false'
+                    sh 'CI=true npm test -- --watchAll=false --coverage'
                 }
             }
             post {
