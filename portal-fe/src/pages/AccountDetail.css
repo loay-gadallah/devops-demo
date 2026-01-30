@@ -1,0 +1,34 @@
+.account-detail .back-btn {
+  margin-bottom: 20px;
+}
+
+.account-summary {
+  margin-bottom: 24px;
+}
+
+.account-summary .summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.account-summary h2 {
+  margin-bottom: 4px;
+}
+
+.account-detail-number {
+  font-size: 14px;
+  color: var(--gray-500);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.summary-right {
+  text-align: right;
+}
+
+.summary-balance {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--gray-800);
+  margin-bottom: 8px;
+}

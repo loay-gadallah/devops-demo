@@ -1,87 +1,84 @@
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { FiSend, FiPlus } from 'react-icons/fi';
+import api from '../services/api';
+import './Transfers.css';
 
-function Transfer() {
-  const [fromAccount, setFromAccount] = useState('');
-  const [toAccount, setToAccount] = useState('');
-  const [amount, setAmount] = useState('');
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+const formatCurrency = (amount, currency = 'USD') =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    setError('');
-    setMessage('');
+const formatDate = (dateStr) =>
+  new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(dateStr));
 
-    if (!fromAccount || !toAccount || !amount) {
-      setError('All fields are required.');
-      return;
-    }
+export default function Transfers() {
+  const [transfers, setTransfers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
-    const numericAmount = parseFloat(amount);
-    if (isNaN(numericAmount) || numericAmount <= 0) {
-      setError('Please enter a valid amount greater than zero.');
-      return;
-    }
+  useEffect(() => {
+    api.get('/api/transfers')
+      .then((res) => setTransfers(res.data.content || res.data || []))
+      .catch((err) => console.error('Failed to load transfers', err))
+      .finally(() => setLoading(false));
+  }, []);
 
-    if (fromAccount === toAccount) {
-      setError('Source and destination accounts must be different.');
-      return;
-    }
-
-    setMessage(`Successfully transferred $${numericAmount.toFixed(2)} from ${fromAccount} to ${toAccount}.`);
-    setFromAccount('');
-    setToAccount('');
-    setAmount('');
-  };
+  if (loading) {
+    return <div className="spinner-container"><div className="spinner" /></div>;
+  }
 
   return (
-    <div className="transfer">
-      <h2>Fund Transfer</h2>
-      <form onSubmit={handleSubmit}>
-        <div className="form-group">
-          <label htmlFor="fromAccount">From Account</label>
-          <select
-            id="fromAccount"
-            value={fromAccount}
-            onChange={(e) => setFromAccount(e.target.value)}
-          >
-            <option value="">Select account</option>
-            <option value="Checking ****4521">Checking ****4521</option>
-            <option value="Savings ****8834">Savings ****8834</option>
-            <option value="Business ****2209">Business ****2209</option>
-          </select>
+    <div className="transfers-page">
+      <div className="section-header">
+        <h3>Transfer History</h3>
+        <button className="btn btn-primary" onClick={() => navigate('/transfers/new')}>
+          <FiPlus /> New Transfer
+        </button>
+      </div>
+
+      {transfers.length > 0 ? (
+        <div className="card">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Beneficiary</th>
+                <th>To Account</th>
+                <th>Amount</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Reference</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transfers.map((t) => (
+                <tr key={t.id}>
+                  <td>{formatDate(t.createdAt || t.date)}</td>
+                  <td>{t.beneficiaryName || '-'}</td>
+                  <td style={{ fontFamily: "'SF Mono', monospace", fontSize: 13 }}>
+                    {t.toAccountNumber}
+                  </td>
+                  <td style={{ fontWeight: 600 }}>{formatCurrency(t.amount, t.currency)}</td>
+                  <td><span className="badge badge-info">{t.type}</span></td>
+                  <td>
+                    <span className={`badge badge-${t.status === 'COMPLETED' ? 'success' : t.status === 'FAILED' ? 'danger' : 'warning'}`}>
+                      {t.status}
+                    </span>
+                  </td>
+                  <td style={{ fontSize: 12, color: 'var(--gray-500)' }}>{t.reference || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        <div className="form-group">
-          <label htmlFor="toAccount">To Account</label>
-          <select
-            id="toAccount"
-            value={toAccount}
-            onChange={(e) => setToAccount(e.target.value)}
-          >
-            <option value="">Select account</option>
-            <option value="Checking ****4521">Checking ****4521</option>
-            <option value="Savings ****8834">Savings ****8834</option>
-            <option value="Business ****2209">Business ****2209</option>
-          </select>
+      ) : (
+        <div className="card">
+          <div className="empty-state">
+            <div className="empty-icon"><FiSend /></div>
+            <h3>No transfers yet</h3>
+            <p>Create your first transfer to get started.</p>
+          </div>
         </div>
-        <div className="form-group">
-          <label htmlFor="amount">Amount ($)</label>
-          <input
-            id="amount"
-            type="number"
-            step="0.01"
-            min="0"
-            placeholder="0.00"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-        </div>
-        <button type="submit">Submit Transfer</button>
-      </form>
-      {error && <p className="error" role="alert">{error}</p>}
-      {message && <p className="success" role="status">{message}</p>}
+      )}
     </div>
   );
 }
-
-export default Transfer;

@@ -20,6 +20,7 @@ spec:
       containers:
         - name: portal-fe
           image: localhost:32000/portal-fe:latest
+          imagePullPolicy: Never
           ports:
             - containerPort: 80
           resources:

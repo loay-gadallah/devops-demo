@@ -1,0 +1,65 @@
+.new-transfer-page .card {
+  max-width: 600px;
+}
+
+.tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 28px;
+  border-bottom: 2px solid var(--gray-100);
+}
+
+.tab {
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--gray-500);
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.tab:hover {
+  color: var(--gray-700);
+}
+
+.tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.form-row {
+  display: flex;
+  gap: 16px;
+}
+
+.transfer-success {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(6, 214, 160, 0.1);
+  color: #059669;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 20px;
+  border-left: 3px solid var(--success);
+}
+
+.transfer-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(239, 71, 111, 0.08);
+  color: var(--danger);
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 20px;
+  border-left: 3px solid var(--danger);
+}

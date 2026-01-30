@@ -1,28 +1,41 @@
 package com.devops.portal.service;
 
+import com.devops.portal.exception.ResourceNotFoundException;
+import com.devops.portal.exception.UnauthorizedException;
 import com.devops.portal.model.Account;
+import com.devops.portal.model.Transaction;
+import com.devops.portal.repository.AccountRepository;
+import com.devops.portal.repository.TransactionRepository;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 @Service
 public class AccountService {
 
-    private final List<Account> accounts = new ArrayList<>();
+    private final AccountRepository accountRepository;
+    private final TransactionRepository transactionRepository;
 
-    public AccountService() {
-        accounts.add(new Account(1L, "ACC-1001", "Alice Johnson", 5200.00));
-        accounts.add(new Account(2L, "ACC-1002", "Bob Smith", 3100.50));
-        accounts.add(new Account(3L, "ACC-1003", "Carol White", 8750.25));
+    public AccountService(AccountRepository accountRepository, TransactionRepository transactionRepository) {
+        this.accountRepository = accountRepository;
+        this.transactionRepository = transactionRepository;
     }
 
-    public List<Account> getAllAccounts() {
-        return accounts;
+    public List<Account> getAccountsByUser(Long userId) {
+        return accountRepository.findByUserId(userId);
     }
 
-    public Optional<Account> getAccountById(Long id) {
-        return accounts.stream().filter(a -> a.getId().equals(id)).findFirst();
+    public Account getAccountById(Long accountId, Long userId) {
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found"));
+        if (!account.getUser().getId().equals(userId)) {
+            throw new UnauthorizedException("You do not own this account");
+        }
+        return account;
+    }
+
+    public List<Transaction> getTransactions(Long accountId, Long userId) {
+        Account account = getAccountById(accountId, userId);
+        return transactionRepository.findByAccountIdOrderByCreatedAtDesc(account.getId());
     }
 }

@@ -20,8 +20,31 @@ spec:
       containers:
         - name: portal-be
           image: localhost:32000/portal-be:latest
+          imagePullPolicy: Never
           ports:
             - containerPort: 8080
+          env:
+            - name: DB_HOST
+              value: "portal-postgres.platform.svc.cluster.local"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: portal-postgres-secret
+                  key: POSTGRES_DB
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: portal-postgres-secret
+                  key: POSTGRES_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: portal-postgres-secret
+                  key: POSTGRES_PASSWORD
+            - name: JWT_SECRET
+              value: "devops-demo-jwt-secret-key-that-is-at-least-256-bits-long-for-hs256"
           resources:
             requests:
               memory: "256Mi"
@@ -33,13 +56,13 @@ spec:
             httpGet:
               path: /actuator/health
               port: 8080
-            initialDelaySeconds: 30
+            initialDelaySeconds: 45
             periodSeconds: 30
           readinessProbe:
             httpGet:
               path: /actuator/health
               port: 8080
-            initialDelaySeconds: 15
+            initialDelaySeconds: 30
             periodSeconds: 10
 ---
 apiVersion: v1

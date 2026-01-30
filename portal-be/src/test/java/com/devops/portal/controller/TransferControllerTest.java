@@ -1,59 +1,101 @@
 package com.devops.portal.controller;
 
-import com.devops.portal.model.Transfer;
-import com.devops.portal.service.TransferService;
+import com.devops.portal.dto.LoginRequest;
+import com.devops.portal.dto.TransferRequest;
+import com.devops.portal.model.*;
+import com.devops.portal.repository.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.bean.MockBean;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
-import java.time.LocalDateTime;
-import java.util.List;
+import java.math.BigDecimal;
 
 import static org.hamcrest.Matchers.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(TransferController.class)
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
 class TransferControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
+    @Autowired private MockMvc mockMvc;
+    @Autowired private ObjectMapper objectMapper;
+    @Autowired private UserRepository userRepository;
+    @Autowired private AccountRepository accountRepository;
+    @Autowired private CardRepository cardRepository;
+    @Autowired private TransactionRepository transactionRepository;
+    @Autowired private TransferRepository transferRepository;
+    @Autowired private PasswordEncoder passwordEncoder;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+    private String userToken;
+    private Long accountId;
 
-    @MockBean
-    private TransferService transferService;
+    @BeforeEach
+    void setUp() throws Exception {
+        transferRepository.deleteAll();
+        transactionRepository.deleteAll();
+        cardRepository.deleteAll();
+        accountRepository.deleteAll();
+        userRepository.deleteAll();
 
-    @Test
-    void listTransfers_returnsAll() throws Exception {
-        when(transferService.getAllTransfers()).thenReturn(List.of(
-                new Transfer(1L, "ACC-1001", "ACC-1002", 100.0, LocalDateTime.now())
-        ));
+        User user = new User();
+        user.setUsername("testuser");
+        user.setPassword(passwordEncoder.encode("password"));
+        user.setFullName("Test User");
+        user.setRole(Role.USER);
+        user = userRepository.save(user);
 
-        mockMvc.perform(get("/api/transfers"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)));
+        Account account = new Account();
+        account.setAccountNumber("ACC-TEST-001");
+        account.setAccountName("Test Checking");
+        account.setType(AccountType.CHECKING);
+        account.setBalance(new BigDecimal("10000.00"));
+        account.setUser(user);
+        account = accountRepository.save(account);
+        accountId = account.getId();
+
+        LoginRequest loginRequest = new LoginRequest("testuser", "password");
+        MvcResult result = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginRequest)))
+                .andReturn();
+        userToken = objectMapper.readTree(result.getResponse().getContentAsString()).get("token").asText();
     }
 
     @Test
-    void createTransfer_returnsCreated() throws Exception {
-        Transfer input = new Transfer(null, "ACC-1001", "ACC-1002", 250.0, null);
-        Transfer saved = new Transfer(1L, "ACC-1001", "ACC-1002", 250.0, LocalDateTime.now());
-
-        when(transferService.createTransfer(any(Transfer.class))).thenReturn(saved);
+    void createTransfer() throws Exception {
+        TransferRequest request = new TransferRequest();
+        request.setFromAccountId(accountId);
+        request.setToAccountNumber("EXT-001");
+        request.setBeneficiaryName("Jane Doe");
+        request.setAmount(new BigDecimal("500.00"));
+        request.setCurrency("USD");
+        request.setType("LOCAL");
+        request.setDescription("Test transfer");
 
         mockMvc.perform(post("/api/transfers")
+                        .header("Authorization", "Bearer " + userToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(input)))
+                        .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id", is(1)))
-                .andExpect(jsonPath("$.amount", is(250.0)));
+                .andExpect(jsonPath("$.amount", is(500.00)))
+                .andExpect(jsonPath("$.status", is("COMPLETED")));
+    }
+
+    @Test
+    void listTransfers() throws Exception {
+        mockMvc.perform(get("/api/transfers")
+                        .header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
     }
 }
