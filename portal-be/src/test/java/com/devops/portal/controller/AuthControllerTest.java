@@ -16,6 +16,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import com.devops.portal.repository.AccountRepository;
+import com.devops.portal.repository.CardRepository;
+import com.devops.portal.repository.TransferRepository;
+import com.devops.portal.repository.TransactionRepository;
 
 import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -38,8 +42,24 @@ class AuthControllerTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private TransferRepository transferRepository;
+
+    @Autowired
+    private TransactionRepository transactionRepository;
+
+    @Autowired
+    private CardRepository cardRepository;
+
+    @Autowired
+    private AccountRepository accountRepository;
+
     @BeforeEach
     void setUp() {
+        transferRepository.deleteAll();
+        transactionRepository.deleteAll();
+        cardRepository.deleteAll();
+        accountRepository.deleteAll();
         userRepository.deleteAll();
 
         User admin = new User();
