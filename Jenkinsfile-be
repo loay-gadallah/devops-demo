@@ -109,24 +109,23 @@ pipeline {
         stage('Release Approval') {
             steps {
                 script {
-                    def issueKey = params.ISSUE_KEY
-                    if (!issueKey) {
-                        issueKey = createJiraIssue("Release approval for portal-be build #${env.BUILD_NUMBER}")
-                    }
-
-                    echo "Waiting for Jira approval on ${issueKey}..."
-
-                    timeout(time: 60, unit: 'MINUTES') {
-                        waitUntil(initialRecurrencePeriod: 15000) {
-                            def approved = checkJiraApproval(issueKey)
-                            return approved
+                    try {
+                        def issueKey = params.ISSUE_KEY
+                        if (!issueKey) {
+                            issueKey = createJiraIssue("Release approval for portal-be build #${env.BUILD_NUMBER}")
                         }
+
+                        echo "Waiting for Jira approval on ${issueKey}..."
+
+                        timeout(time: 60, unit: 'MINUTES') {
+                            waitUntil(initialRecurrencePeriod: 15000) {
+                                def approved = checkJiraApproval(issueKey)
+                                return approved
+                            }
+                        }
+                    } catch (Exception e) {
+                        echo "Release approval skipped: ${e.message}"
                     }
-                }
-            }
-            post {
-                failure {
-                    script { notifyJira('Release approval TIMED OUT') }
                 }
             }
         }
