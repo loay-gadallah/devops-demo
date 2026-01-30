@@ -52,7 +52,8 @@ pipeline {
                     withSonarQubeEnv(env.SONAR_QUBE_ENV) {
                         script {
                             def scannerHome = tool 'SonarScanner'
-                            sh "${scannerHome}/bin/sonar-scanner"
+                            def nodeExe = sh(script: 'which node', returnStdout: true).trim()
+                            sh "${scannerHome}/bin/sonar-scanner -Dsonar.nodejs.executable=${nodeExe}"
                         }
                     }
                 }
