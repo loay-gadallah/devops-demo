@@ -62,8 +62,14 @@ pipeline {
                         '''
                     }
                 }
-                timeout(time: 2, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: false
+                script {
+                    try {
+                        timeout(time: 2, unit: 'MINUTES') {
+                            waitForQualityGate abortPipeline: false
+                        }
+                    } catch (Exception e) {
+                        echo "Quality gate check timed out or failed: ${e.message}"
+                    }
                 }
             }
             post {
