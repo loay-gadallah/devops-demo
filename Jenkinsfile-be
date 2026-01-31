@@ -8,7 +8,7 @@ pipeline {
         IMAGE_TAG       = "${env.GIT_COMMIT?.take(8) ?: 'latest'}"
         STAGING_NS      = 'apps-staging'
         PROD_NS         = 'apps-prod'
-        JIRA_SITE       = 'jira.local'
+        JIRA_SITE       = 'jira.platform.svc.cluster.local'
         JIRA_PROJECT    = 'DEVOPS'
     }
 
@@ -166,9 +166,10 @@ def notifyJira(String message) {
     def issueKey = params.ISSUE_KEY
     if (!issueKey) return
     try {
-        withCredentials([usernamePassword(credentialsId: 'jira-creds', usernameVariable: 'JIRA_USER', passwordVariable: 'JIRA_PASS')]) {
+        withCredentials([string(credentialsId: 'jira-pat', variable: 'JIRA_TOKEN')]) {
             sh """
-                curl -s -u "\${JIRA_USER}:\${JIRA_PASS}" \
+                curl -s \
+                    -H "Authorization: Bearer \${JIRA_TOKEN}" \
                     -X POST \
                     -H "Content-Type: application/json" \
                     -d '{"body": "[Jenkins] ${message} - Build #${env.BUILD_NUMBER}"}' \
@@ -183,9 +184,10 @@ def notifyJira(String message) {
 def checkJiraApproval(String issueKey) {
     def result = false
     try {
-        withCredentials([usernamePassword(credentialsId: 'jira-creds', usernameVariable: 'JIRA_USER', passwordVariable: 'JIRA_PASS')]) {
+        withCredentials([string(credentialsId: 'jira-pat', variable: 'JIRA_TOKEN')]) {
             def response = sh(script: """
-                curl -s -u "\${JIRA_USER}:\${JIRA_PASS}" \
+                curl -s \
+                    -H "Authorization: Bearer \${JIRA_TOKEN}" \
                     "http://${JIRA_SITE}/rest/api/2/issue/${issueKey}"
             """, returnStdout: true).trim()
             def issue = readJSON text: response
@@ -202,9 +204,10 @@ def checkJiraApproval(String issueKey) {
 def createJiraIssue(String summary) {
     def issueKey = ''
     try {
-        withCredentials([usernamePassword(credentialsId: 'jira-creds', usernameVariable: 'JIRA_USER', passwordVariable: 'JIRA_PASS')]) {
+        withCredentials([string(credentialsId: 'jira-pat', variable: 'JIRA_TOKEN')]) {
             def response = sh(script: """
-                curl -s -u "\${JIRA_USER}:\${JIRA_PASS}" \
+                curl -s \
+                    -H "Authorization: Bearer \${JIRA_TOKEN}" \
                     -X POST \
                     -H "Content-Type: application/json" \
                     -d '{"fields": {"project": {"key": "${JIRA_PROJECT}"}, "summary": "${summary}", "issuetype": {"name": "Task"}}}' \
