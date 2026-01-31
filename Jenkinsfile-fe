@@ -178,7 +178,7 @@ def checkJiraApproval(String issueKey) {
                     -H "Authorization: Bearer \${JIRA_TOKEN}" \
                     "http://${JIRA_SITE}/rest/api/2/issue/${issueKey}"
             """, returnStdout: true).trim()
-            def issue = readJSON text: response
+            def issue = new groovy.json.JsonSlurper().parseText(response)
             def status = issue.fields?.status?.name?.toLowerCase()
             def labels = issue.fields?.labels?.collect { it.toLowerCase() }
             result = (status == 'approved' || labels?.contains('approved'))
@@ -201,7 +201,7 @@ def createJiraIssue(String summary) {
                     -d '{"fields": {"project": {"key": "${JIRA_PROJECT}"}, "summary": "${summary}", "issuetype": {"name": "Task"}}}' \
                     "http://${JIRA_SITE}/rest/api/2/issue"
             """, returnStdout: true).trim()
-            def json = readJSON text: response
+            def json = new groovy.json.JsonSlurper().parseText(response)
             issueKey = json.key
         }
     } catch (Exception e) {
